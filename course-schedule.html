@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" type="text/css" href="dc.css"/>
+    <title>Class Schedule</title>
+    <style>
+    #container {
+      margin: 50px;
+    }
+    #description { margin-left:25px; }
+
+    .d3-tip {
+      line-height: 1;
+      font-weight: bold;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index:100;
+    }
+
+    /* Creates a small triangle extender for the tooltip */
+    .d3-tip:after {
+      box-sizing: border-box;
+      display: inline;
+      font-size: 10px;
+      width: 100%;
+      line-height: 1;
+      color: rgba(0, 0, 0, 0.8);
+      position: absolute;
+      pointer-events: none;
+      z-index:100;
+    }
+
+    /* Northward tooltips */
+    .d3-tip.n:after {
+      content: "\25BC";
+      margin: -1px 0 0 0;
+      top: 100%;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Eastward tooltips */
+    .d3-tip.e:after {
+      content: "\25C0";
+      margin: -4px 0 0 0;
+      top: 50%;
+      left: -8px;
+    }
+
+    /* Southward tooltips */
+    .d3-tip.s:after {
+      content: "\25B2";
+      margin: 0 0 1px 0;
+      top: -8px;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Westward tooltips */
+    .d3-tip.w:after {
+      content: "\25B6";
+      margin: -4px 0 0 -1px;
+      top: 50%;
+      left: 100%;
+    }
+    </style>
+
+</head>
+
+<div id="container">
+  <div id="description">
+    <h2>Courses offered this semester</h2>
+    <p>A visual representation of when the following one-hour courses are offered:
+    <span style="color:#a6cee3">Biology, </span><span style="color:#1f78b4">Math, </span><span style="color:#b2df8a">Physics, </span><span style="color:#33a02c">English,</span> and <span style="color:#fb9a99">Accounting</span>.
+  </div>
+  <div id='dc-courses-chart'></div>
+</div>
+
+<script type="text/javascript" src="http://d3js.org/queue.v1.min.js"></script>
+
+<script type="text/javascript" src="d3.js"></script>
+<script type="text/javascript" src="crossfilter.js"></script>
+<script type="text/javascript" src="dc.js"></script>
+<script type="text/javascript" src="d3.tip.js"></script>
+<script type="text/javascript">
+
+var dtFormat = d3.time.format("%Y-%m-%dT%H:%M:%SZ");
+var data = [
+  {date: "2014-09-01T8:00:00Z", courses: ["Biology", "Math"]},
+  {date: "2014-09-01T9:00:00Z", courses: ["Math", "Physics"]},
+  {date: "2014-09-01T10:00:00Z", courses: ["English"]},
+  {date: "2014-09-01T11:00:00Z", courses: ["Biology"]},
+  {date: "2014-09-01T12:00:00Z", courses: ["English", "Math", "Physics"]},
+  {date: "2014-09-01T13:00:00Z", courses: ["Accounting", "Biology"]},
+  {date: "2014-09-01T14:00:00Z", courses: ["Physics"]},
+  {date: "2014-09-01T15:00:00Z", courses: ["Math"]}
+];
+
+// format datetime and count max courses per timeslice
+var numCourses = []
+data.forEach(function(d) {
+  d.dt = dtFormat.parse(d.date);
+  numCourses.push(d.hasOwnProperty('courses') ? d.courses.length : 0);
+});
+var maxCourseCount = Math.max.apply(null, numCourses); // couldn't find an easier way to do: max(numCourses)
+
+// normalize the course heights 
+// i.e. how "tall" each course is in the normalized stacked bar chart.
+// If there are two course in a timeslice, each is 0.5 tall (etc)
+var i = 0;
+data.forEach(function(d) {
+  var w = []
+  for (j = 0; j < maxCourseCount; j++) {
+    // if you have two courses and this is the first or second course, return 0.5 (etc)
+    var nonZero = numCourses[i] > j;
+    var height = nonZero ? 1/numCourses[i] : 0;
+    w.push({'height': height, 'name': nonZero ? d.courses[j] : ""});
+  }
+  d['processed'] = w;
+  i++;
+});
+
+// transform data from above into arrays we can stack in the bar chart
+// so if max number of courses in one timeslice = 2
+// and the count of courses per timeslice is as follows
+// count : [0 0 0 1 1 2   2   2   2   1 0 0]
+// then each layer in the stacked bar chart would have the following data
+// layer0: [0 0 0 1 1 0.5 0.5 0.5 0.5 1 0 0]
+// layer1: [0 0 0 0 0 0.5 0.5 0.5 0.5 0 0 0]
+var stacks = [];
+var weightedVals = function (x, numCourses) {
+  var stack = [];
+  numCourses.forEach(function(val) {
+    stack.push((val >= x) ? (1/val) : 0);
+  });
+  return stack;
+};
+for (var x = 1; x <= maxCourseCount; x++) {
+  stacks.push(weightedVals(x, numCourses));
+}
+
+/* Charting time! */
+var ndx = crossfilter(data);
+var timeDimension = ndx.dimension(function(d) { return d.dt; });
+var timeExtent = d3.extent(data, function(d){ return d.dt });
+
+var coursesByHour = [];
+var addCourse = function(z) {
+  return function(p, v) {
+    p.height = v.processed[z].height;
+    p.name = v.processed[z].name;
+    return p;
+  };
+};
+var removeCourse = function(p, v){
+  console.log('removing');
+  return p;
+}; 
+var initCourse = function(){
+  return {height:0, name: ""};
+}
+
+var coursesByHour;
+for (var z = 0; z < maxCourseCount; z++) {
+  coursesByHour[z] = timeDimension.group().reduce(addCourse(z), removeCourse, initCourse);
+}
+
+// colors
+var courseColorDomain = ["Biology", "Math", "Physics", "English", "Accounting"]
+var courseColorRange = ["#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99"];
+// accessors
+courseHeightAccessor = function (p) { return p.value.height; }
+courseColorAccessor = function (p) { return p.value.name; }
+
+/* The chart!!! */
+var coursesChart = dc.barChart("#dc-courses-chart")
+                     .width(900)
+                     .height(400)
+                     .brushOn(false)
+                     .dimension(timeDimension)
+                     .group(coursesByHour[0], 'courses')
+                     .x(d3.time.scale().domain(timeExtent))
+                     .round(d3.time.hour.round)
+                     .xUnits(d3.time.hours)
+                     .renderHorizontalGridLines(true)
+                     .renderVerticalGridLines(true)
+                     .renderTitle(false)
+                     .valueAccessor(courseHeightAccessor)
+                     .colors(d3.scale.ordinal().domain(courseColorDomain).range(courseColorRange))
+                     .colorAccessor(courseColorAccessor)
+// stack the rest of the courses 
+// i.e. use "stacked bar chart" with normalized data to create "normalized bar chart"
+for (var x = 1; x < maxCourseCount; x++){
+  coursesChart.stack(coursesByHour[x]);
+}
+
+// formatting
+coursesChart.yAxis().ticks(0);
+
+// render chart!
+dc.renderAll();
+
+// tooltips
+var courseTip = d3.tip()
+                  .attr('class', 'd3-tip')
+                  .offset([-10, 0])
+                  .html(function (d) { return d.data.value.name; });
+var courseTipSelector = 'div#dc-courses-chart.dc-chart rect';
+d3.selectAll(courseTipSelector).call(courseTip);
+d3.selectAll(courseTipSelector).on('mouseover', courseTip.show)
+                               .on('mouseout', courseTip.hide);
+
+</script>
+
+</body>
+</html>
