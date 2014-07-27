@@ -1,6 +1,6 @@
 dcjs-normalized-bar
 ===================
-[See the demo here](http://www.seeaustinhack.com/dcjs-normalized-bar/)
+[See the demo here](http://www.seeaustinhack.com/dcjs-normalized-bar/). View course-schedule.html for source.
 
 This demo uses dc.js stacked bar chart to create the appearance of a normalized bar chart. 
 
