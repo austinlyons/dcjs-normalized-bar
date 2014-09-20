@@ -113,7 +113,8 @@ var maxCourseCount = Math.max.apply(null, numCourses); // couldn't find an easie
 // If there are two course in a timeslice, each is 0.5 tall (etc)
 var i = 0;
 data.forEach(function(d) {
-  var w = []
+  var w = [];
+  var j;
   for (j = 0; j < maxCourseCount; j++) {
     // if you have two courses and this is the first or second course, return 0.5 (etc)
     var nonZero = numCourses[i] > j;
